@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+I have removed the "Stage Alert" text from the top of the screen and adjusted the base math for $x$ (the spawn rate) so that Stages 1 and 2 feel much more crowded.I have lowered the baseSpawnRate from 40 to 20. This means Stage 1 now spawns bombs twice as fast as before, and Stage 2 ($2x$) will be even more intense.HTML<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battlefield Baklava Shooter - Survival</title>
+    <title>Baklava Shooter - High Intensity</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1410; }
@@ -18,12 +18,11 @@
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             text-align: center; color: #fff; font-size: 48px; display: none;
             z-index: 20; background: rgba(0,0,0,0.95); padding: 50px; border-radius: 20px;
-            border: 4px solid #ff4444; box-shadow: 0 0 50px rgba(255, 68, 68, 0.5);
+            border: 4px solid #ff4444;
         }
         #gameOver button {
             margin-top: 30px; padding: 20px 50px; font-size: 28px; cursor: pointer;
             background: #ff4444; color: #fff; border: none; border-radius: 10px;
-            font-weight: bold; transition: 0.2s;
         }
     </style>
 </head>
@@ -31,7 +30,7 @@
     <div id="ui">
         <div>SCORE: <span id="score">0</span></div>
         <div class="ammo-text">BAKLAVAS: <span id="ammo">3</span></div>
-        <div style="font-size: 14px; color: #aaa;">+1 Ammo every 10s</div>
+        <div id="time">TIME: 0s</div>
     </div>
     
     <div id="gameOver">
@@ -45,7 +44,6 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // --- ASSETS ---
         const headImg = new Image();
         let headLoaded = false;
         headImg.onload = () => { headLoaded = true; };
@@ -71,15 +69,17 @@
         let bombs = [];
         let baklavas = [];
         let particles = [];
-        let blockSpawnTimer = 0;
-        let blockSpawnRate = 35; // Initial spawn delay
-        let difficulty = 1;
-        let screenShake = 0;
-        let flashIntensity = 0;
-        
-        // --- NEW MECHANICS ---
-        let ammo = 3;
         let totalFrames = 0;
+        let secondsElapsed = 0;
+        
+        // --- UPDATED BASE VALUES ---
+        const baseSpawnRate = 20; // Lowered to make Stage 1 & 2 much more crowded
+        const baseSpeed = 4;      
+        
+        let currentMultiplier = 1;
+        let ammo = 3;
+
+        const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 9, walkCycle: 0 };
 
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
@@ -89,140 +89,91 @@
 
         function shootBaklava() {
             if (ammo > 0) {
-                baklavas.push({
-                    x: player.x,
-                    y: player.y - 30,
-                    speed: 14,
-                    size: 80 
-                });
+                baklavas.push({ x: player.x, y: player.y - 30, speed: 15, size: 85 });
                 ammo--;
                 document.getElementById('ammo').textContent = ammo;
             }
         }
 
-        const player = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            speed: 8,
-            walkCycle: 0
-        };
-
         function drawBomb(x, y, size) {
             const centerX = x + size / 2;
             const centerY = y + size / 2;
-            const radius = size / 2.5;
-            const shake = Math.sin(Date.now() * 0.03) * 3;
-
-            ctx.beginPath();
-            ctx.strokeStyle = '#8B4513';
-            ctx.lineWidth = 3;
-            ctx.moveTo(centerX, centerY - radius);
-            ctx.quadraticCurveTo(centerX + 12 + shake, centerY - radius - 15, centerX + 8 + shake, centerY - radius - 22);
-            ctx.stroke();
-
-            ctx.fillStyle = Math.random() > 0.3 ? '#ffcc00' : '#ffffff';
-            ctx.beginPath();
-            ctx.arc(centerX + 8 + shake, centerY - radius - 22, 5 + Math.random() * 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            const gradient = ctx.createRadialGradient(centerX - radius/3, centerY - radius/3, radius/10, centerX, centerY, radius);
-            gradient.addColorStop(0, '#666');
-            gradient.addColorStop(1, '#000');
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            ctx.fill();
+            const radius = size / 2.2;
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(centerX, centerY - radius);
+            ctx.lineTo(centerX + 10, centerY - radius - 15); ctx.stroke();
+            ctx.fillStyle = Math.random() > 0.5 ? '#ff0' : '#f00';
+            ctx.beginPath(); ctx.arc(centerX + 10, centerY - radius - 15, 5, 0, Math.PI*2); ctx.fill();
         }
 
         function drawStickman(x, y) {
-            const headSize = 75;
+            const headSize = 80;
             const isMoving = keys['a'] || keys['d'] || keys['w'] || keys['s'] || keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'];
-            player.walkCycle = isMoving ? player.walkCycle + 0.2 : 0.5;
+            player.walkCycle = isMoving ? player.walkCycle + 0.25 : 0.5;
             const legSwing = Math.sin(player.walkCycle) * 25;
-            ctx.strokeStyle = '#E6B5AC';
-            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 6;
             if (headLoaded) ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
             ctx.beginPath();
-            ctx.moveTo(x, y + 35); ctx.lineTo(x, y + 85);
+            ctx.moveTo(x, y + 35); ctx.lineTo(x, y + 85); 
             ctx.moveTo(x, y + 55); ctx.lineTo(x - 35, y + 70 + (isMoving ? -legSwing : 0));
             ctx.moveTo(x, y + 55); ctx.lineTo(x + 35, y + 70 + (isMoving ? legSwing : 0));
-            ctx.moveTo(x, y + 85); ctx.lineTo(x - (isMoving ? legSwing : 20), y + 120);
-            ctx.moveTo(x, y + 85); ctx.lineTo(x + (isMoving ? legSwing : 20), y + 120);
+            ctx.moveTo(x, y + 85); ctx.lineTo(x - (isMoving ? legSwing : 20), y + 125);
+            ctx.moveTo(x, y + 85); ctx.lineTo(x + (isMoving ? legSwing : 20), y + 125);
             ctx.stroke();
         }
 
-        function createExplosion(x, y, type = 'fire') {
-            if (type === 'death') {
-                flashIntensity = 1.0;
-                screenShake = 25;
-                for (let i = 0; i < 150; i++) {
-                    particles.push({
-                        x, y,
-                        vx: (Math.random() - 0.5) * 40,
-                        vy: (Math.random() - 0.5) * 40,
-                        life: 80,
-                        size: 3 + Math.random() * 8,
-                        color: `rgb(255, ${Math.floor(Math.random() * 200)}, 0)`
-                    });
-                }
-            } else {
-                for (let i = 0; i < 25; i++) {
-                    particles.push({
-                        x, y,
-                        vx: (Math.random() - 0.5) * 15,
-                        vy: (Math.random() - 0.5) * 15,
-                        life: 40,
-                        size: 4,
-                        color: '#FFD700'
-                    });
-                }
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 30; i++) {
+                particles.push({
+                    x, y, vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15,
+                    life: 40, size: 5, color: color
+                });
             }
         }
 
         function update() {
-            if (!gameRunning) {
-                updateParticles();
-                return;
-            }
+            if (!gameRunning) return;
 
             totalFrames++;
-            
-            // Harder Difficulty over time (every 5 seconds)
-            if (totalFrames % 300 === 0) {
-                difficulty += 0.5;
-                blockSpawnRate = Math.max(8, blockSpawnRate - 2);
-            }
+            if (totalFrames % 60 === 0) {
+                secondsElapsed++;
+                document.getElementById('time').textContent = `TIME: ${secondsElapsed}s`;
+                
+                if (secondsElapsed % 20 === 0 && currentMultiplier < 4) {
+                    currentMultiplier++;
+                }
 
-            // Gain 1 Baklava every 10 seconds (600 frames)
-            if (totalFrames % 600 === 0) {
-                ammo++;
-                document.getElementById('ammo').textContent = ammo;
+                if (secondsElapsed % 10 === 0) {
+                    ammo++;
+                    document.getElementById('ammo').textContent = ammo;
+                }
             }
-
-            if (flashIntensity > 0) flashIntensity -= 0.05;
-            if (screenShake > 0) screenShake *= 0.9;
 
             if ((keys['ArrowLeft'] || keys['a']) && player.x > 50) player.x -= player.speed;
             if ((keys['ArrowRight'] || keys['d']) && player.x < canvas.width - 50) player.x += player.speed;
             if ((keys['ArrowUp'] || keys['w']) && player.y > 50) player.y -= player.speed;
-            if ((keys['ArrowDown'] || keys['s']) && player.y < canvas.height - 120) player.y += player.speed;
+            if ((keys['ArrowDown'] || keys['s']) && player.y < canvas.height - 130) player.y += player.speed;
 
-            blockSpawnTimer++;
-            if (blockSpawnTimer > blockSpawnRate) {
-                const size = 45 + Math.random() * 45;
-                bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: 4 + (difficulty * 0.5) });
-                blockSpawnTimer = 0;
+            if (totalFrames % Math.max(1, Math.floor(baseSpawnRate / currentMultiplier)) === 0) {
+                const size = 50 + Math.random() * 40;
+                bombs.push({ 
+                    x: Math.random() * (canvas.width - size), 
+                    y: -size, 
+                    width: size, 
+                    height: size, 
+                    speed: baseSpeed * currentMultiplier 
+                });
             }
 
             baklavas.forEach((b, bi) => {
                 b.y -= b.speed;
-                if (b.y < -100) baklavas.splice(bi, 1);
                 bombs.forEach((bomb, mi) => {
                     if (b.x - b.size/2 < bomb.x + bomb.width && b.x + b.size/2 > bomb.x && b.y - b.size/2 < bomb.y + bomb.height && b.y + b.size/2 > bomb.y) {
-                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, 'hit');
-                        bombs.splice(mi, 1);
-                        baklavas.splice(bi, 1);
-                        score += 100;
+                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, '#FFD700');
+                        bombs.splice(mi, 1); baklavas.splice(bi, 1);
+                        score += 100 * currentMultiplier;
                     }
                 });
             });
@@ -231,46 +182,30 @@
                 bomb.y += bomb.speed;
                 if (bomb.x < player.x + 30 && bomb.x + bomb.width > player.x - 30 &&
                     bomb.y < player.y + 90 && bomb.y + bomb.height > player.y - 30) {
-                    createExplosion(player.x, player.y, 'death');
+                    createExplosion(player.x, player.y, 'red');
                     gameOver();
                 }
-                if (bomb.y > canvas.height) {
-                    bombs.splice(i, 1);
-                    score += 10; // Extra points for dodging
-                }
+                if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
 
-            updateParticles();
-            document.getElementById('score').textContent = Math.floor(score);
-        }
-
-        function updateParticles() {
             particles.forEach((p, i) => {
                 p.x += p.vx; p.y += p.vy; p.life--;
                 if (p.life <= 0) particles.splice(i, 1);
             });
+
+            document.getElementById('score').textContent = score;
         }
 
         function draw() {
-            ctx.save();
-            if (screenShake > 1) ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
-            if (flashIntensity > 0) {
-                ctx.fillStyle = `rgba(255, 180, 80, ${flashIntensity * 0.4})`;
-            } else {
-                ctx.fillStyle = '#3d3329';
-            }
-            ctx.fillRect(-100, -100, canvas.width + 200, canvas.height + 200);
+            ctx.fillStyle = '#3d3329';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (gameRunning) drawStickman(player.x, player.y);
             bombs.forEach(b => drawBomb(b.x, b.y, b.width));
-            baklavas.forEach(b => {
-                if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size);
-            });
+            baklavas.forEach(b => { if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size); });
             particles.forEach(p => {
-                ctx.fillStyle = p.color;
-                ctx.globalAlpha = p.life / 80;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size || 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 40;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
             });
-            ctx.restore();
             ctx.globalAlpha = 1;
         }
 
@@ -279,13 +214,13 @@
         function gameOver() {
             gameRunning = false;
             failSound.play().catch(e => {});
-            document.getElementById('finalScore').innerHTML = `MISSION FAILED<br>Score: ${score}`;
+            document.getElementById('finalScore').innerHTML = `SURVIVED ${secondsElapsed}s<br>Score: ${score}`;
             document.getElementById('gameOver').style.display = 'block';
         }
 
         function restartGame() {
-            gameRunning = true; score = 0; difficulty = 1; bombs = []; baklavas = []; particles = [];
-            blockSpawnRate = 35; totalFrames = 0; ammo = 3;
+            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; currentMultiplier = 1; ammo = 3;
+            bombs = []; baklavas = []; particles = [];
             player.x = canvas.width / 2; player.y = canvas.height / 2;
             document.getElementById('ammo').textContent = ammo;
             document.getElementById('gameOver').style.display = 'none';
