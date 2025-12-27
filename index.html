@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battlefield Baklava Shooter - Giant Ammo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1410; }
+        #gameCanvas { display: block; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; color: #fff;
+            font-size: 24px; font-weight: bold; text-shadow: 3px 3px 6px rgba(0,0,0,0.9);
+            z-index: 10; pointer-events: none;
+        }
+        #gameOver {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: #fff; font-size: 48px; display: none;
+            z-index: 20; background: rgba(0,0,0,0.95); padding: 50px; border-radius: 20px;
+            border: 4px solid #ff4444;
+        }
+        #gameOver button {
+            margin-top: 30px; padding: 20px 50px; font-size: 28px; cursor: pointer;
+            background: #ff4444; color: #fff; border: none; border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>SCORE: <span id="score">0</span></div>
+        <div style="font-size: 16px; color: #ffcc00;">SPACE TO SHOOT GIANT BAKLAVA!</div>
+    </div>
+    
+    <div id="gameOver">
+        <div id="finalScore"></div>
+        <button onclick="restartGame()">RE-DEPLOY</button>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const headImg = new Image();
+        headImg.src = 'photo1.png'; 
+        const baklavaImg = new Image();
+        baklavaImg.src = 'baklava.png'; 
+
+        const failSound = new Audio('fail_sound.mp3'); 
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let gameRunning = true;
+        let score = 0;
+        let keys = {};
+        let bombs = [];
+        let baklavas = [];
+        let particles = [];
+        let blockSpawnTimer = 0;
+        let blockSpawnRate = 25;
+        let difficulty = 1;
+        let screenShake = 0;
+
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            speed: 8,
+            walkCycle: 0
+        };
+
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (e.code === 'Space' && gameRunning) shootBaklava();
+        });
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        function shootBaklava() {
+            baklavas.push({
+                x: player.x,
+                y: player.y - 20, // Adjusted spawn point so it shoots from the chest area
+                speed: 14,
+                size: 80 // Baklava is now double the size!
+            });
+        }
+
+        function drawBomb(x, y, size) {
+            const centerX = x + size / 2;
+            const centerY = y + size / 2;
+            const radius = size / 2.5;
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(centerX, centerY - radius);
+            ctx.lineTo(centerX + 5, centerY - radius - 10); ctx.stroke();
+        }
+
+        function drawStickman(x, y) {
+            const headSize = 75;
+            const isMoving = keys['a'] || keys['d'] || keys['w'] || keys['s'] || keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'];
+            player.walkCycle = isMoving ? player.walkCycle + 0.2 : 0.5;
+            const legSwing = Math.sin(player.walkCycle) * 25;
+
+            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5;
+            if (headLoaded = true) ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y + 35); ctx.lineTo(x, y + 85);
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 35, y + 70 + (isMoving ? -legSwing : 0));
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 35, y + 70 + (isMoving ? legSwing : 0));
+            ctx.moveTo(x, y + 85); ctx.lineTo(x - (isMoving ? legSwing : 20), y + 120);
+            ctx.moveTo(x, y + 85); ctx.lineTo(x + (isMoving ? legSwing : 20), y + 120);
+            ctx.stroke();
+        }
+
+        function createExplosion(x, y, color = 'orange', count = 30) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 15,
+                    vy: (Math.random() - 0.5) * 15,
+                    life: 50,
+                    color: color
+                });
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            if (screenShake > 0) screenShake *= 0.9;
+
+            if ((keys['ArrowLeft'] || keys['a']) && player.x > 50) player.x -= player.speed;
+            if ((keys['ArrowRight'] || keys['d']) && player.x < canvas.width - 50) player.x += player.speed;
+            if ((keys['ArrowUp'] || keys['w']) && player.y > 50) player.y -= player.speed;
+            if ((keys['ArrowDown'] || keys['s']) && player.y < canvas.height - 120) player.y += player.speed;
+
+            blockSpawnTimer++;
+            if (blockSpawnTimer > blockSpawnRate) {
+                const size = 45 + Math.random() * 45;
+                bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: 4 + difficulty });
+                blockSpawnTimer = 0;
+                difficulty += 0.01;
+            }
+
+            baklavas.forEach((b, bi) => {
+                b.y -= b.speed;
+                if (b.y < -100) baklavas.splice(bi, 1);
+
+                bombs.forEach((bomb, mi) => {
+                    // Collision with larger hit box for the bigger baklava
+                    if (b.x - b.size/2 < bomb.x + bomb.width && b.x + b.size/2 > bomb.x && b.y - b.size/2 < bomb.y + bomb.height && b.y + b.size/2 > bomb.y) {
+                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, '#FFD700', 25);
+                        bombs.splice(mi, 1);
+                        baklavas.splice(bi, 1);
+                        score += 100; // Increased points for giant baklava hits!
+                    }
+                });
+            });
+
+            bombs.forEach((bomb, i) => {
+                bomb.y += bomb.speed;
+                if (bomb.x < player.x + 30 && bomb.x + bomb.width > player.x - 30 &&
+                    bomb.y < player.y + 90 && bomb.y + bomb.height > player.y - 30) {
+                    screenShake = 20;
+                    createExplosion(player.x, player.y, 'red', 100);
+                    gameOver();
+                }
+                if (bomb.y > canvas.height) bombs.splice(i, 1);
+            });
+
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+
+            document.getElementById('score').textContent = Math.floor(score);
+        }
+
+        function draw() {
+            ctx.save();
+            if (screenShake > 1) ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
+            ctx.fillStyle = '#3d3329';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameRunning) drawStickman(player.x, player.y);
+            bombs.forEach(b => drawBomb(b.x, b.y, b.width));
+
+            baklavas.forEach(b => {
+                // Drawing the image centered on its coordinates
+                ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size);
+            });
+
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 50;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+            });
+
+            ctx.restore();
+            ctx.globalAlpha = 1;
+        }
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+        function gameOver() {
+            gameRunning = false;
+            failSound.play().catch(e => {});
+            document.getElementById('finalScore').innerHTML = `MISSION FAILED<br>Score: ${score}`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function restartGame() {
+            gameRunning = true; score = 0; difficulty = 1; bombs = []; baklavas = []; particles = [];
+            player.x = canvas.width / 2; player.y = canvas.height / 2;
+            document.getElementById('gameOver').style.display = 'none';
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
