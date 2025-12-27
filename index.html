@@ -1,27 +1,39 @@
-I have removed the "Stage Alert" text from the top of the screen and adjusted the base math for $x$ (the spawn rate) so that Stages 1 and 2 feel much more crowded.I have lowered the baseSpawnRate from 40 to 20. This means Stage 1 now spawns bombs twice as fast as before, and Stage 2 ($2x$) will be even more intense.HTML<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Baklava Shooter - High Intensity</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Baklava Shooter - Mobile Edition</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1410; }
         #gameCanvas { display: block; }
+        
         #ui {
-            position: absolute; top: 20px; left: 20px; color: #fff;
-            font-size: 24px; font-weight: bold; text-shadow: 3px 3px 6px rgba(0,0,0,0.9);
+            position: absolute; top: 10px; left: 10px; color: #fff;
+            font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
             z-index: 10; pointer-events: none;
         }
-        .ammo-text { color: #ffcc00; font-size: 18px; margin-top: 5px; }
+        .ammo-text { color: #ffcc00; font-size: 16px; }
+
+        /* Mobile Controls */
+        .touch-btn {
+            position: absolute; bottom: 30px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255,255,255,0.4);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; user-select: none; z-index: 15;
+        }
+        #fireBtn { right: 30px; width: 80px; height: 80px; background: rgba(255, 68, 68, 0.4); font-size: 14px; }
+        #joystick { left: 30px; width: 100px; height: 100px; font-size: 12px; }
+
         #gameOver {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; color: #fff; font-size: 48px; display: none;
-            z-index: 20; background: rgba(0,0,0,0.95); padding: 50px; border-radius: 20px;
-            border: 4px solid #ff4444;
+            text-align: center; color: #fff; font-size: 32px; display: none;
+            z-index: 20; background: rgba(0,0,0,0.95); padding: 30px; border-radius: 20px;
+            border: 4px solid #ff4444; width: 80%;
         }
         #gameOver button {
-            margin-top: 30px; padding: 20px 50px; font-size: 28px; cursor: pointer;
+            margin-top: 20px; padding: 15px 30px; font-size: 20px; cursor: pointer;
             background: #ff4444; color: #fff; border: none; border-radius: 10px;
         }
     </style>
@@ -30,9 +42,11 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
     <div id="ui">
         <div>SCORE: <span id="score">0</span></div>
         <div class="ammo-text">BAKLAVAS: <span id="ammo">3</span></div>
-        <div id="time">TIME: 0s</div>
     </div>
     
+    <div id="joystick" class="touch-btn">DRAG</div>
+    <div id="fireBtn" class="touch-btn">FIRE</div>
+
     <div id="gameOver">
         <div id="finalScore"></div>
         <button onclick="restartGame()">RE-DEPLOY</button>
@@ -72,20 +86,47 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
         let totalFrames = 0;
         let secondsElapsed = 0;
         
-        // --- UPDATED BASE VALUES ---
-        const baseSpawnRate = 20; // Lowered to make Stage 1 & 2 much more crowded
+        const baseSpawnRate = 20; 
         const baseSpeed = 4;      
-        
         let currentMultiplier = 1;
         let ammo = 3;
 
         const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 9, walkCycle: 0 };
 
+        // --- KEYBOARD CONTROLS ---
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
             if (e.code === 'Space' && gameRunning) shootBaklava();
         });
         window.addEventListener('keyup', e => keys[e.key] = false);
+
+        // --- TOUCH CONTROLS ---
+        const fireBtn = document.getElementById('fireBtn');
+        const joystick = document.getElementById('joystick');
+        let touchX = null, touchY = null;
+
+        fireBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameRunning) shootBaklava();
+        });
+
+        joystick.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Calculate movement direction
+            if (touch.clientX < centerX - 10) keys['a'] = true; else keys['a'] = false;
+            if (touch.clientX > centerX + 10) keys['d'] = true; else keys['d'] = false;
+            if (touch.clientY < centerY - 10) keys['w'] = true; else keys['w'] = false;
+            if (touch.clientY > centerY + 10) keys['s'] = true; else keys['s'] = false;
+        });
+
+        joystick.addEventListener('touchend', () => {
+            keys['a'] = false; keys['d'] = false; keys['w'] = false; keys['s'] = false;
+        });
 
         function shootBaklava() {
             if (ammo > 0) {
@@ -104,8 +145,6 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
             ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
             ctx.beginPath(); ctx.moveTo(centerX, centerY - radius);
             ctx.lineTo(centerX + 10, centerY - radius - 15); ctx.stroke();
-            ctx.fillStyle = Math.random() > 0.5 ? '#ff0' : '#f00';
-            ctx.beginPath(); ctx.arc(centerX + 10, centerY - radius - 15, 5, 0, Math.PI*2); ctx.fill();
         }
 
         function drawStickman(x, y) {
@@ -125,26 +164,20 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
         }
 
         function createExplosion(x, y, color) {
-            for (let i = 0; i < 30; i++) {
+            for (let i = 0; i < 20; i++) {
                 particles.push({
-                    x, y, vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15,
-                    life: 40, size: 5, color: color
+                    x, y, vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.5) * 12,
+                    life: 30, size: 4, color: color
                 });
             }
         }
 
         function update() {
             if (!gameRunning) return;
-
             totalFrames++;
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
-                document.getElementById('time').textContent = `TIME: ${secondsElapsed}s`;
-                
-                if (secondsElapsed % 20 === 0 && currentMultiplier < 4) {
-                    currentMultiplier++;
-                }
-
+                if (secondsElapsed % 20 === 0 && currentMultiplier < 4) currentMultiplier++;
                 if (secondsElapsed % 10 === 0) {
                     ammo++;
                     document.getElementById('ammo').textContent = ammo;
@@ -154,17 +187,11 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
             if ((keys['ArrowLeft'] || keys['a']) && player.x > 50) player.x -= player.speed;
             if ((keys['ArrowRight'] || keys['d']) && player.x < canvas.width - 50) player.x += player.speed;
             if ((keys['ArrowUp'] || keys['w']) && player.y > 50) player.y -= player.speed;
-            if ((keys['ArrowDown'] || keys['s']) && player.y < canvas.height - 130) player.y += player.speed;
+            if ((keys['ArrowDown'] || keys['s']) && player.y < canvas.height - 180) player.y += player.speed;
 
             if (totalFrames % Math.max(1, Math.floor(baseSpawnRate / currentMultiplier)) === 0) {
                 const size = 50 + Math.random() * 40;
-                bombs.push({ 
-                    x: Math.random() * (canvas.width - size), 
-                    y: -size, 
-                    width: size, 
-                    height: size, 
-                    speed: baseSpeed * currentMultiplier 
-                });
+                bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: baseSpeed * currentMultiplier });
             }
 
             baklavas.forEach((b, bi) => {
@@ -192,7 +219,6 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
                 p.x += p.vx; p.y += p.vy; p.life--;
                 if (p.life <= 0) particles.splice(i, 1);
             });
-
             document.getElementById('score').textContent = score;
         }
 
@@ -203,7 +229,7 @@ I have removed the "Stage Alert" text from the top of the screen and adjusted th
             bombs.forEach(b => drawBomb(b.x, b.y, b.width));
             baklavas.forEach(b => { if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size); });
             particles.forEach(p => {
-                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 40;
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
             });
             ctx.globalAlpha = 1;
